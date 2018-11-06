@@ -1,0 +1,45 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "factoryName": {
+            "value": "msc-daf-bifoaz-dev"
+        },
+        "DMBI2Azure_privateKeyContent": {
+            "value": ""
+        },
+        "DMBI2Azure_passPhrase": {
+            "value": ""
+        },
+        "LinkedService_STA_mscstabifoazdev_connectionString": {
+            "value": ""
+        },
+        "DEST_AAS_MDD_STG_properties_typeProperties_fileName": {
+            "value": ""
+        },
+        "DEST_AAS_MDD_STG_properties_typeProperties_folderPath": {
+            "value": "mscaasbifoaz/AAS_MDD/STG"
+        },
+        "SRC_DMBI2AZURE_SFTP_properties_typeProperties_fileName": {
+            "value": "*.csv"
+        },
+        "SRC_DMBI2AZURE_SFTP_properties_typeProperties_folderPath": {
+            "value": "/FromDLL"
+        },
+        "SRC_SFTP_CTL_FILE_properties_typeProperties_fileName": {
+            "value": "DMBI2LA.ctl"
+        },
+        "SRC_SFTP_CTL_FILE_properties_typeProperties_folderPath": {
+            "value": "/FromDLL"
+        },
+        "SRC_DMBI2AZURE_SFTP_CTL_FILE_properties_typeProperties_fileName": {
+            "value": "DMBI2LA.ctl"
+        },
+        "SRC_DMBI2AZURE_SFTP_CTL_FILE_properties_typeProperties_folderPath": {
+            "value": "/FromDLL"
+        },
+        "DMBI2Azure_properties_typeProperties_userName": {
+            "value": "Azure_BIFOAZ"
+        }
+    }
+}

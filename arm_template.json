@@ -1,0 +1,486 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "factoryName": {
+            "type": "string",
+            "metadata": "Data Factory Name",
+            "defaultValue": "msc-daf-bifoaz-dev"
+        },
+        "DMBI2Azure_privateKeyContent": {
+            "type": "secureString",
+            "metadata": "Secure string for 'privateKeyContent' of 'DMBI2Azure'"
+        },
+        "DMBI2Azure_passPhrase": {
+            "type": "secureString",
+            "metadata": "Secure string for 'passPhrase' of 'DMBI2Azure'"
+        },
+        "LinkedService_STA_mscstabifoazdev_connectionString": {
+            "type": "secureString",
+            "metadata": "Secure string for 'connectionString' of 'LinkedService_STA_mscstabifoazdev'"
+        },
+        "DEST_AAS_MDD_STG_properties_typeProperties_fileName": {
+            "type": "string",
+            "defaultValue": ""
+        },
+        "DEST_AAS_MDD_STG_properties_typeProperties_folderPath": {
+            "type": "string",
+            "defaultValue": "mscaasbifoaz/AAS_MDD/STG"
+        },
+        "SRC_DMBI2AZURE_SFTP_properties_typeProperties_fileName": {
+            "type": "string",
+            "defaultValue": "*.csv"
+        },
+        "SRC_DMBI2AZURE_SFTP_properties_typeProperties_folderPath": {
+            "type": "string",
+            "defaultValue": "/FromDLL"
+        },
+        "SRC_SFTP_CTL_FILE_properties_typeProperties_fileName": {
+            "type": "string",
+            "defaultValue": "DMBI2LA.ctl"
+        },
+        "SRC_SFTP_CTL_FILE_properties_typeProperties_folderPath": {
+            "type": "string",
+            "defaultValue": "/FromDLL"
+        },
+        "SRC_DMBI2AZURE_SFTP_CTL_FILE_properties_typeProperties_fileName": {
+            "type": "string",
+            "defaultValue": "DMBI2LA.ctl"
+        },
+        "SRC_DMBI2AZURE_SFTP_CTL_FILE_properties_typeProperties_folderPath": {
+            "type": "string",
+            "defaultValue": "/FromDLL"
+        },
+        "DMBI2Azure_properties_typeProperties_userName": {
+            "type": "string",
+            "defaultValue": "Azure_BIFOAZ"
+        }
+    },
+    "variables": {
+        "factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+    },
+    "resources": [
+        {
+            "name": "[concat(parameters('factoryName'), '/PL_Refresh_AAS_MDD')]",
+            "type": "Microsoft.DataFactory/factories/pipelines",
+            "apiVersion": "2017-09-01-preview",
+            "properties": {
+                "activities": [
+                    {
+                        "name": "Copy_Files_From_SFTP",
+                        "type": "Copy",
+                        "dependsOn": [],
+                        "policy": {
+                            "timeout": "7.00:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [
+                            {
+                                "name": "Source",
+                                "value": "//*.csv"
+                            },
+                            {
+                                "name": "Destination",
+                                "value": "mscaasbifoaz/AAS_MDD/STG/"
+                            }
+                        ],
+                        "typeProperties": {
+                            "source": {
+                                "type": "FileSystemSource",
+                                "recursive": true
+                            },
+                            "sink": {
+                                "type": "BlobSink"
+                            },
+                            "enableStaging": false,
+                            "dataIntegrationUnits": 0
+                        },
+                        "inputs": [
+                            {
+                                "referenceName": "SRC_DMBI2AZURE_SFTP",
+                                "type": "DatasetReference",
+                                "parameters": {}
+                            }
+                        ],
+                        "outputs": [
+                            {
+                                "referenceName": "DEST_AAS_MDD_STG",
+                                "type": "DatasetReference",
+                                "parameters": {}
+                            }
+                        ]
+                    },
+                    {
+                        "name": "Process_AAS_Database_AAS_MDD",
+                        "type": "WebActivity",
+                        "dependsOn": [
+                            {
+                                "activity": "Copy_Files_From_SFTP",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            }
+                        ],
+                        "policy": {
+                            "timeout": "7.00:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "url": {
+                                "value": "@concat(pipeline().parameters.FunctionAppUrl,'ProcessAasDatabaseHttp?code=',pipeline().parameters.FunctionAppHostKey)",
+                                "type": "Expression"
+                            },
+                            "method": "POST",
+                            "headers": {
+                                "Content-Type": "application/json"
+                            },
+                            "body": {
+                                "servername": "asazure://westeurope.asazure.windows.net/mscaasbifoazdev",
+                                "databasename": "AAS_MDD"
+                            }
+                        }
+                    },
+                    {
+                        "name": "Delete_CSV_from_SFTP",
+                        "type": "WebActivity",
+                        "dependsOn": [
+                            {
+                                "activity": "Process_AAS_Database_AAS_MDD",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            }
+                        ],
+                        "policy": {
+                            "timeout": "7.00:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "url": {
+                                "value": "@concat(pipeline().parameters.FunctionAppUrl,'DeleteSftpFiles?code=',pipeline().parameters.FunctionAppHostKey)",
+                                "type": "Expression"
+                            },
+                            "method": "POST",
+                            "headers": {
+                                "Content-Type": "application/json"
+                            },
+                            "body": {
+                                "extension": "csv"
+                            }
+                        }
+                    }
+                ],
+                "parameters": {
+                    "FunctionAppHostKey": {
+                        "type": "String",
+                        "defaultValue": "T17Iw5J7kWtisKyMS55/DDqyKbN9Iy3aKYvUzHb7xPNsvsnVjv5Duw=="
+                    },
+                    "FunctionAppUrl": {
+                        "type": "String",
+                        "defaultValue": "https://msc-fua-bifoaz-dev.azurewebsites.net/api/"
+                    }
+                },
+                "annotations": []
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/datasets/SRC_DMBI2AZURE_SFTP')]",
+                "[concat(variables('factoryId'), '/datasets/DEST_AAS_MDD_STG')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/PL_POLL_SFTP_FOR_CTL_FILE')]",
+            "type": "Microsoft.DataFactory/factories/pipelines",
+            "apiVersion": "2017-09-01-preview",
+            "properties": {
+                "activities": [
+                    {
+                        "name": "Get Metadata CTL File",
+                        "description": "Get the metadata from the control, file",
+                        "type": "GetMetadata",
+                        "dependsOn": [],
+                        "policy": {
+                            "timeout": "7.00:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "dataset": {
+                                "referenceName": "SRC_DMBI2AZURE_SFTP_CTL_FILE",
+                                "type": "DatasetReference",
+                                "parameters": {}
+                            },
+                            "fieldList": [
+                                "exists"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "CTL File Exists",
+                        "type": "IfCondition",
+                        "dependsOn": [
+                            {
+                                "activity": "Get Metadata CTL File",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            }
+                        ],
+                        "userProperties": [],
+                        "typeProperties": {
+                            "expression": {
+                                "value": "@activity('Get Metadata CTL File').output.exists",
+                                "type": "Expression"
+                            },
+                            "ifTrueActivities": [
+                                {
+                                    "name": "PL_Refresh_AAS_MDD",
+                                    "type": "ExecutePipeline",
+                                    "dependsOn": [],
+                                    "userProperties": [],
+                                    "typeProperties": {
+                                        "pipeline": {
+                                            "referenceName": "PL_Refresh_AAS_MDD",
+                                            "type": "PipelineReference"
+                                        },
+                                        "waitOnCompletion": true
+                                    }
+                                },
+                                {
+                                    "name": "Delete_CTL_from_SFTP",
+                                    "type": "WebActivity",
+                                    "dependsOn": [
+                                        {
+                                            "activity": "PL_Refresh_AAS_MDD",
+                                            "dependencyConditions": [
+                                                "Succeeded"
+                                            ]
+                                        }
+                                    ],
+                                    "policy": {
+                                        "timeout": "7.00:00:00",
+                                        "retry": 0,
+                                        "retryIntervalInSeconds": 30,
+                                        "secureOutput": false,
+                                        "secureInput": false
+                                    },
+                                    "userProperties": [],
+                                    "typeProperties": {
+                                        "url": {
+                                            "value": "@concat(pipeline().parameters.FunctionAppUrl,'DeleteSftpFiles?code=',pipeline().parameters.FunctionAppHostKey)",
+                                            "type": "Expression"
+                                        },
+                                        "method": "POST",
+                                        "headers": {
+                                            "Content-Type": "application/json"
+                                        },
+                                        "body": {
+                                            "extension": "ctl"
+                                        },
+                                        "linkedServices": [],
+                                        "datasets": []
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "parameters": {
+                    "FunctionAppUrl": {
+                        "type": "String",
+                        "defaultValue": "https://msc-fua-bifoaz-dev.azurewebsites.net/api/"
+                    },
+                    "FunctionAppHostKey": {
+                        "type": "String",
+                        "defaultValue": "T17Iw5J7kWtisKyMS55/DDqyKbN9Iy3aKYvUzHb7xPNsvsnVjv5Duw=="
+                    }
+                },
+                "annotations": []
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/datasets/SRC_DMBI2AZURE_SFTP_CTL_FILE')]",
+                "[concat(variables('factoryId'), '/pipelines/PL_Refresh_AAS_MDD')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/DEST_AAS_MDD_STG')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2017-09-01-preview",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "LinkedService_STA_mscstabifoazdev",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "AzureBlob",
+                "typeProperties": {
+                    "fileName": "[parameters('DEST_AAS_MDD_STG_properties_typeProperties_fileName')]",
+                    "folderPath": "[parameters('DEST_AAS_MDD_STG_properties_typeProperties_folderPath')]"
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/LinkedService_STA_mscstabifoazdev')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/SRC_DMBI2AZURE_SFTP')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2017-09-01-preview",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "DMBI2Azure",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "FileShare",
+                "typeProperties": {
+                    "fileName": "[parameters('SRC_DMBI2AZURE_SFTP_properties_typeProperties_fileName')]",
+                    "folderPath": "[parameters('SRC_DMBI2AZURE_SFTP_properties_typeProperties_folderPath')]"
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/DMBI2Azure')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/SRC_SFTP_CTL_FILE')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2017-09-01-preview",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "DMBI2Azure",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "FileShare",
+                "typeProperties": {
+                    "format": {
+                        "type": "TextFormat",
+                        "columnDelimiter": ",",
+                        "rowDelimiter": "",
+                        "nullValue": "\\N",
+                        "treatEmptyAsNull": true,
+                        "skipLineCount": 0,
+                        "firstRowAsHeader": false
+                    },
+                    "fileName": "[parameters('SRC_SFTP_CTL_FILE_properties_typeProperties_fileName')]",
+                    "folderPath": "[parameters('SRC_SFTP_CTL_FILE_properties_typeProperties_folderPath')]"
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/DMBI2Azure')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/SRC_DMBI2AZURE_SFTP_CTL_FILE')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2017-09-01-preview",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "DMBI2Azure",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "FileShare",
+                "typeProperties": {
+                    "fileName": "[parameters('SRC_DMBI2AZURE_SFTP_CTL_FILE_properties_typeProperties_fileName')]",
+                    "folderPath": "[parameters('SRC_DMBI2AZURE_SFTP_CTL_FILE_properties_typeProperties_folderPath')]"
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/DMBI2Azure')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/TRG_MINUTE15')]",
+            "type": "Microsoft.DataFactory/factories/triggers",
+            "apiVersion": "2017-09-01-preview",
+            "properties": {
+                "annotations": [],
+                "runtimeState": "Stopped",
+                "pipelines": [
+                    {
+                        "pipelineReference": {
+                            "referenceName": "PL_POLL_SFTP_FOR_CTL_FILE",
+                            "type": "PipelineReference"
+                        },
+                        "parameters": {}
+                    }
+                ],
+                "type": "ScheduleTrigger",
+                "typeProperties": {
+                    "recurrence": {
+                        "frequency": "Minute",
+                        "interval": 5,
+                        "startTime": "2018-09-26T08:46:47.139Z",
+                        "timeZone": "UTC"
+                    }
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/pipelines/PL_POLL_SFTP_FOR_CTL_FILE')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/integrationRuntime1')]",
+            "type": "Microsoft.DataFactory/factories/integrationRuntimes",
+            "apiVersion": "2017-09-01-preview",
+            "properties": {
+                "type": "SelfHosted",
+                "typeProperties": {}
+            },
+            "dependsOn": []
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/DMBI2Azure')]",
+            "type": "Microsoft.DataFactory/factories/linkedServices",
+            "apiVersion": "2017-09-01-preview",
+            "properties": {
+                "annotations": [],
+                "type": "Sftp",
+                "typeProperties": {
+                    "host": "mftacc.dllgroup.com",
+                    "port": 22,
+                    "skipHostKeyValidation": true,
+                    "authenticationType": "SshPublicKey",
+                    "userName": "[parameters('DMBI2Azure_properties_typeProperties_userName')]",
+                    "privateKeyContent": {
+                        "type": "SecureString",
+                        "value": "[parameters('DMBI2Azure_privateKeyContent')]"
+                    },
+                    "passPhrase": {
+                        "type": "SecureString",
+                        "value": "[parameters('DMBI2Azure_passPhrase')]"
+                    }
+                }
+            },
+            "dependsOn": []
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/LinkedService_STA_mscstabifoazdev')]",
+            "type": "Microsoft.DataFactory/factories/linkedServices",
+            "apiVersion": "2017-09-01-preview",
+            "properties": {
+                "annotations": [],
+                "type": "AzureBlobStorage",
+                "typeProperties": {
+                    "connectionString": "[parameters('LinkedService_STA_mscstabifoazdev_connectionString')]"
+                }
+            },
+            "dependsOn": []
+        }
+    ]
+}
